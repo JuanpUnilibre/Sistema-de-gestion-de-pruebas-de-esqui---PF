@@ -47,3 +47,22 @@ SELECT * FROM Auditoria_Pruebas;
 SELECT * FROM Auditoria_Federaciones;
 SELECT * FROM Log_Inserciones_BD;
 ```
+
+## Como probar la aplicacion
+
+Abrir PowerShell y ejecutar:
+
+```powershell
+cd "C:\Users\JESUS\OneDrive\Desktop\ProyectoFinal_Esqui_Base_Usuario\app"
+python -m pip install -r requirements.txt
+python app_esquiadores.py
+```
+
+La aplicacion permite:
+
+- Ver todos los esquiadores.
+- Insertar un esquiador.
+- Actualizar nombre, edad y federacion de un esquiador.
+- Ejecutar el procedimiento almacenado.
+
+```
