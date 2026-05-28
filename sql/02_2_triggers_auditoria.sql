@@ -1,4 +1,4 @@
-USE esqui_olimpico;
+﻿USE esqui_olimpico;
 GO
 
 /* ============================================================
@@ -14,12 +14,12 @@ BEGIN
     CREATE TABLE Auditoria_Esquiadores (
         Id_Auditoria int IDENTITY PRIMARY KEY,
         DNI int NOT NULL,
-        Nombre_Anterior varchar(255) NULL,
-        Nombre_Nuevo varchar(255) NULL,
-        Edad_Anterior int NULL,
-        Edad_Nueva int NULL,
-        Federacion_Anterior int NULL,
-        Federacion_Nueva int NULL,
+        Nombre_Anterior varchar(255) NOT NULL,
+        Nombre_Nuevo varchar(255) NOT NULL,
+        Edad_Anterior int NOT NULL,
+        Edad_Nueva int NOT NULL,
+        Federacion_Anterior int NOT NULL,
+        Federacion_Nueva int NOT NULL,
         Accion varchar(20) NOT NULL,
         Fecha_Registro datetime NOT NULL DEFAULT GETDATE(),
         Usuario_BD sysname NOT NULL DEFAULT SUSER_SNAME()
@@ -32,10 +32,10 @@ BEGIN
     CREATE TABLE Auditoria_Pruebas (
         Id_Auditoria int IDENTITY PRIMARY KEY,
         IdTPrueba int NOT NULL,
-        Tiempo_Anterior decimal(19,0) NULL,
-        Tiempo_Nuevo decimal(19,0) NULL,
-        Tipo_Anterior varchar(255) NULL,
-        Tipo_Nuevo varchar(255) NULL,
+        Tiempo_Anterior decimal(19,0) NOT NULL,
+        Tiempo_Nuevo decimal(19,0) NOT NULL,
+        Tipo_Anterior varchar(255) NOT NULL,
+        Tipo_Nuevo varchar(255) NOT NULL,
         Accion varchar(20) NOT NULL,
         Fecha_Registro datetime NOT NULL DEFAULT GETDATE(),
         Usuario_BD sysname NOT NULL DEFAULT SUSER_SNAME()
@@ -48,10 +48,10 @@ BEGIN
     CREATE TABLE Auditoria_Federaciones (
         Id_Auditoria int IDENTITY PRIMARY KEY,
         Id_Federacion int NOT NULL,
-        Nombre_Anterior varchar(255) NULL,
-        Nombre_Nuevo varchar(255) NULL,
-        Federados_Anterior int NULL,
-        Federados_Nuevo int NULL,
+        Nombre_Anterior varchar(255) NOT NULL,
+        Nombre_Nuevo varchar(255) NOT NULL,
+        Federados_Anterior int NOT NULL,
+        Federados_Nuevo int NOT NULL,
         Accion varchar(20) NOT NULL,
         Fecha_Registro datetime NOT NULL DEFAULT GETDATE(),
         Usuario_BD sysname NOT NULL DEFAULT SUSER_SNAME()

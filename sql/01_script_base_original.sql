@@ -1,4 +1,4 @@
-USE master;
+﻿USE master;
 GO
 
 CREATE DATABASE esqui_olimpico;
@@ -15,7 +15,9 @@ CREATE TABLE federaciones (
   Id_Federacion int IDENTITY NOT NULL,
   Nombre        varchar(255) NOT NULL,
   num_Federados int          NOT NULL,
-  PRIMARY KEY (Id_Federacion)
+  PRIMARY KEY (Id_Federacion),
+  UNIQUE (Nombre),
+  CHECK (num_Federados >= 0)
 );
 
 CREATE TABLE [Estaciones de esqui] (
@@ -25,13 +27,16 @@ CREATE TABLE [Estaciones de esqui] (
   Dirrecion        varchar(255) NOT NULL,
   Telefono         int          NOT NULL,
   Km_Esquiables    float(10)    NOT NULL,
-  PRIMARY KEY (Codigo_Estacion)
+  PRIMARY KEY (Codigo_Estacion),
+  UNIQUE (Nombre),
+  CHECK (Km_Esquiables > 0)
 );
 
 CREATE TABLE Participantes (
   Id_participantes int IDENTITY NOT NULL,
   Tipo             varchar(255) NOT NULL,
-  PRIMARY KEY (Id_participantes)
+  PRIMARY KEY (Id_participantes),
+  CHECK (Tipo IN ('INDIVIDUAL', 'EQUIPO'))
 );
 
 -- =============================================
@@ -43,14 +48,16 @@ CREATE TABLE Esquiadores (
   Nombre        varchar(255) NOT NULL,
   Edad          int          NOT NULL,
   ID_Federacion int          NOT NULL,
-  PRIMARY KEY (DNI)
+  PRIMARY KEY (DNI),
+  CHECK (Edad > 0)
 );
 
 CREATE TABLE Equipos (
   Id_Equipo  int IDENTITY NOT NULL,
   Nombre     varchar(255) NOT NULL,
   DniCapitan int          NOT NULL,
-  PRIMARY KEY (Id_Equipo)
+  PRIMARY KEY (Id_Equipo),
+  UNIQUE (Nombre)
 );
 
 CREATE TABLE Administran (
@@ -64,14 +71,17 @@ CREATE TABLE Pistas (
   Codigo_Estacion   int       NOT NULL,
   kilometros        float(10) NOT NULL,
   GradoDificultas   varchar(255) NOT NULL,
-  PRIMARY KEY ([Num secuanecial], Codigo_Estacion)
+  PRIMARY KEY ([Num secuanecial], Codigo_Estacion),
+  CHECK (kilometros > 0),
+  CHECK (GradoDificultas IN ('Azul', 'Verde', 'Roja', 'Negra'))
 );
 
 CREATE TABLE Pista_Compuesta (
-  PistasCodigo_Estacion int NOT NULL,
-  Pista_1               int NOT NULL,
-  Pista_2               int NOT NULL,
-  PRIMARY KEY (PistasCodigo_Estacion, Pista_1, Pista_2)
+  Pista_Compuesta  int NOT NULL,
+  Pista_Componente int NOT NULL,
+  Codigo_Estacion  int NOT NULL,
+  PRIMARY KEY (Codigo_Estacion, Pista_Compuesta, Pista_Componente),
+  CHECK (Pista_Compuesta <> Pista_Componente)
 );
 
 CREATE TABLE Pruebas (
@@ -83,7 +93,11 @@ CREATE TABLE Pruebas (
   Tiempo_Ganador        decimal(19, 0)  NOT NULL,
   Codigo_Estacion       int             NOT NULL,
   ID_Ganador            int             NOT NULL,
-  PRIMARY KEY (IdTPrueba)
+  PRIMARY KEY (IdTPrueba),
+  UNIQUE (Nombre),
+  UNIQUE (IdTPrueba, Codigo_Estacion),
+  CHECK (Fecha_inicio_Prevista <= fecha_fin_Previsra),
+  CHECK (Tiempo_Ganador > 0)
 );
 
 CREATE TABLE Pertenece_Equipos (
@@ -106,7 +120,8 @@ CREATE TABLE Jornadas (
   fecha           date          NOT NULL,
   TiempoParcial   decimal(19,0) NOT NULL,
   PRIMARY KEY (Id_participante, IdPrueba, fecha),
-  UNIQUE (IdJornada)
+  UNIQUE (IdJornada),
+  CHECK (TiempoParcial > 0)
 );
 
 CREATE TABLE [Participante indivi] (
@@ -124,8 +139,12 @@ CREATE TABLE ParticipanteEqupo (
 CREATE TABLE Participacion (
   Id_participante int NOT NULL,
   IdPrueba        int NOT NULL,
+  Numero_Secuencial int NOT NULL,
   Posicion        int NOT NULL,
-  PRIMARY KEY (Id_participante, IdPrueba)
+  PRIMARY KEY (Id_participante, IdPrueba),
+  UNIQUE (IdPrueba, Numero_Secuencial),
+  CHECK (Numero_Secuencial > 0),
+  CHECK (Posicion > 0)
 );
 
 CREATE TABLE interviene (
@@ -135,7 +154,9 @@ CREATE TABLE interviene (
   fecha            date          NOT NULL,
   TiempoEmpleado   decimal(19,0) NOT NULL,
   Posicion         int           NOT NULL,
-  PRIMARY KEY (DNI, IdTPrueba, Id_participantes)
+  PRIMARY KEY (DNI, IdTPrueba, Id_participantes),
+  CHECK (TiempoEmpleado > 0),
+  CHECK (Posicion > 0)
 );
 GO
 
@@ -147,13 +168,14 @@ ALTER TABLE Equipos            ADD CONSTRAINT [Es capitan]    FOREIGN KEY (DniCa
 ALTER TABLE Administran        ADD CONSTRAINT administra      FOREIGN KEY (ID_Federacion)    REFERENCES federaciones (Id_Federacion);
 ALTER TABLE Administran        ADD CONSTRAINT [administrada por] FOREIGN KEY (Codigo_Estacion) REFERENCES [Estaciones de esqui] (Codigo_Estacion);
 ALTER TABLE Pistas             ADD CONSTRAINT Tiene           FOREIGN KEY (Codigo_Estacion)  REFERENCES [Estaciones de esqui] (Codigo_Estacion);
-ALTER TABLE Pista_Compuesta    ADD CONSTRAINT [se compone]    FOREIGN KEY (Pista_1, PistasCodigo_Estacion) REFERENCES Pistas ([Num secuanecial], Codigo_Estacion);
-ALTER TABLE Pista_Compuesta    ADD CONSTRAINT compone         FOREIGN KEY (Pista_2, PistasCodigo_Estacion) REFERENCES Pistas ([Num secuanecial], Codigo_Estacion);
+ALTER TABLE Pista_Compuesta    ADD CONSTRAINT [pista compuesta existe] FOREIGN KEY (Pista_Compuesta, Codigo_Estacion) REFERENCES Pistas ([Num secuanecial], Codigo_Estacion);
+ALTER TABLE Pista_Compuesta    ADD CONSTRAINT [pista componente existe] FOREIGN KEY (Pista_Componente, Codigo_Estacion) REFERENCES Pistas ([Num secuanecial], Codigo_Estacion);
 ALTER TABLE Pruebas            ADD CONSTRAINT [sede de]       FOREIGN KEY (Codigo_Estacion)  REFERENCES [Estaciones de esqui] (Codigo_Estacion);
 ALTER TABLE Pruebas            ADD CONSTRAINT gana            FOREIGN KEY (ID_Ganador)       REFERENCES Participantes (Id_participantes);
 ALTER TABLE Pertenece_Equipos  ADD CONSTRAINT [pertenece a]   FOREIGN KEY (ID_Equipo)        REFERENCES Equipos (Id_Equipo);
 ALTER TABLE Pertenece_Equipos  ADD CONSTRAINT Integra         FOREIGN KEY (DNI)              REFERENCES Esquiadores (DNI);
 ALTER TABLE Pruebas_Pistas     ADD CONSTRAINT [se usa para]   FOREIGN KEY (ID_Prueba)        REFERENCES Pruebas (IdTPrueba);
+ALTER TABLE Pruebas_Pistas     ADD CONSTRAINT [usa pistas de su estacion] FOREIGN KEY (ID_Prueba, Codigo_Estacion) REFERENCES Pruebas (IdTPrueba, Codigo_Estacion);
 ALTER TABLE Pruebas_Pistas     ADD CONSTRAINT [es usada en]   FOREIGN KEY ([Num secuanecial], Codigo_Estacion) REFERENCES Pistas ([Num secuanecial], Codigo_Estacion);
 ALTER TABLE [Participante indivi] ADD CONSTRAINT pertenece    FOREIGN KEY (DNI)              REFERENCES Esquiadores (DNI);
 ALTER TABLE [Participante indivi] ADD CONSTRAINT subtiip      FOREIGN KEY (Id_participantes) REFERENCES Participantes (Id_participantes);
@@ -165,13 +187,128 @@ ALTER TABLE Jornadas           ADD CONSTRAINT [es en la]      FOREIGN KEY (Id_pa
 ALTER TABLE interviene         ADD CONSTRAINT interve         FOREIGN KEY (DNI)              REFERENCES Esquiadores (DNI);
 ALTER TABLE interviene         ADD CONSTRAINT [es prueba]     FOREIGN KEY (IdTPrueba)        REFERENCES Pruebas (IdTPrueba);
 ALTER TABLE interviene         ADD CONSTRAINT FKinterviene214810 FOREIGN KEY (Id_participantes) REFERENCES ParticipanteEqupo (Id_participantes);
+ALTER TABLE interviene         ADD CONSTRAINT [equipo participa en prueba] FOREIGN KEY (Id_participantes, IdTPrueba) REFERENCES Participacion (Id_participante, IdPrueba);
+GO
+
+-- =============================================
+-- REGLAS DE NEGOCIO ENTRE SUBTIPOS
+-- =============================================
+CREATE OR ALTER TRIGGER trg_ParticipanteIndiv_ValidaTipoYExclusividad
+ON [Participante indivi]
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF EXISTS (
+        SELECT 1
+        FROM inserted i
+        INNER JOIN Participantes p ON p.Id_participantes = i.Id_participantes
+        WHERE p.Tipo <> 'INDIVIDUAL'
+    )
+    BEGIN
+        THROW 50001, 'El participante individual debe tener Tipo = INDIVIDUAL.', 1;
+    END;
+
+    IF EXISTS (
+        SELECT 1
+        FROM inserted i
+        INNER JOIN Pertenece_Equipos pe ON pe.DNI = i.DNI
+    )
+    BEGIN
+        THROW 50002, 'Un esquiador de equipo no puede registrarse como participante individual.', 1;
+    END;
+END;
+GO
+
+CREATE OR ALTER TRIGGER trg_ParticipanteEquipo_ValidaTipo
+ON ParticipanteEqupo
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF EXISTS (
+        SELECT 1
+        FROM inserted i
+        INNER JOIN Participantes p ON p.Id_participantes = i.Id_participantes
+        WHERE p.Tipo <> 'EQUIPO'
+    )
+    BEGIN
+        THROW 50003, 'El participante de equipo debe tener Tipo = EQUIPO.', 1;
+    END;
+END;
+GO
+
+CREATE OR ALTER TRIGGER trg_PerteneceEquipos_ValidaExclusividad
+ON Pertenece_Equipos
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF EXISTS (
+        SELECT 1
+        FROM inserted i
+        INNER JOIN [Participante indivi] pi ON pi.DNI = i.DNI
+    )
+    BEGIN
+        THROW 50004, 'Un esquiador individual no puede registrarse como miembro de equipo.', 1;
+    END;
+END;
+GO
+
+CREATE OR ALTER TRIGGER trg_Jornadas_ValidaParticipanteIndividual
+ON Jornadas
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF EXISTS (
+        SELECT 1
+        FROM inserted i
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM [Participante indivi] pi
+            WHERE pi.Id_participantes = i.Id_participante
+        )
+    )
+    BEGIN
+        THROW 50005, 'Las jornadas solo registran tiempos de participantes individuales.', 1;
+    END;
+END;
+GO
+
+CREATE OR ALTER TRIGGER trg_Interviene_ValidaMiembroEquipo
+ON interviene
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF EXISTS (
+        SELECT 1
+        FROM inserted i
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM ParticipanteEqupo pte
+            INNER JOIN Pertenece_Equipos pe ON pe.ID_Equipo = pte.Id_Equipo
+            WHERE pte.Id_participantes = i.Id_participantes
+              AND pe.DNI = i.DNI
+        )
+    )
+    BEGIN
+        THROW 50006, 'El esquiador que interviene debe pertenecer al equipo participante.', 1;
+    END;
+END;
 GO
 
 -- =============================================
 -- DATOS: FEDERACIONES
 -- =============================================
 INSERT INTO federaciones (Nombre, num_Federados) VALUES
-('Federacion Espa�ola de Esqui',   1500),
+('Federacion Española de Esqui',   1500),
 ('Federacion Francesa de Esqui',   2000),
 ('Federacion Alemana de Esqui',    1800),
 ('Federacion Italiana de Esqui',   1600),
@@ -241,8 +378,8 @@ INSERT INTO Esquiadores (DNI, Nombre, Edad, ID_Federacion) VALUES
 -- DATOS: EQUIPOS
 -- =============================================
 INSERT INTO Equipos (Nombre, DniCapitan) VALUES
-('Equipo Espa�a A',   12345678),
-('Equipo Espa�a B',   33333333),
+('Equipo España A',   12345678),
+('Equipo España B',   33333333),
 ('Equipo Francia A',  10000001),
 ('Equipo Francia B',  10000005),
 ('Equipo Alemania A', 20000001),
@@ -261,7 +398,7 @@ INSERT INTO Equipos (Nombre, DniCapitan) VALUES
 -- DATOS: PERTENECE_EQUIPOS
 -- Individuales sin equipo: 22222222, 66666666,
 -- 10000004, 10000008, 20000004, 30000004,
--- 40000004, 50000004, 60000004, 70000002
+-- 40000004, 50000004, 60000004, 80000004
 -- =============================================
 INSERT INTO Pertenece_Equipos (DNI, ID_Equipo) VALUES
 (12345678, 1),
@@ -309,8 +446,8 @@ INSERT INTO Pertenece_Equipos (DNI, ID_Equipo) VALUES
 -- DATOS: ESTACIONES DE ESQUI
 -- =============================================
 INSERT INTO [Estaciones de esqui] (Nombre, Persona_Contacto, Dirrecion, Telefono, Km_Esquiables) VALUES
-('Sierra Nevada',     'Juan Perez',    'Granada, Espa�a',       958100001, 120),
-('Baqueira Beret',    'Rosa Vidal',    'Lleida, Espa�a',        973100002, 150),
+('Sierra Nevada',     'Juan Perez',    'Granada, España',       958100001, 120),
+('Baqueira Beret',    'Rosa Vidal',    'Lleida, España',        973100002, 150),
 ('Les Deux Alpes',    'Claude Renard', 'Isere, Francia',        476100003, 200),
 ('Val Thorens',       'Michel Blanc',  'Savoie, Francia',       479100004, 180),
 ('Chamonix',          'Paul Girard',   'Alta Saboya, Francia',  450100005, 170),
@@ -352,16 +489,40 @@ INSERT INTO Pistas ([Num secuanecial], Codigo_Estacion, kilometros, GradoDificul
 (1,12,4.0,'Roja'),(2,12,6.5,'Negra'),(3,12,2.0,'Verde'),(4,12,3.0,'Azul'),
 (1,13,5.5,'Negra'),(2,13,4.0,'Roja'),(3,13,2.5,'Azul'),(4,13,2.8,'Verde'),
 (1,14,3.0,'Azul'),(2,14,4.8,'Roja'),(3,14,6.2,'Negra'),(4,14,1.5,'Verde'),
-(1,15,3.5,'Roja'),(2,15,5.0,'Negra');
+(1,15,3.5,'Roja'),(2,15,5.0,'Negra'),
+(10,1,6.3,'Negra'),(11,1,8.8,'Negra'),
+(10,2,7.5,'Negra'),(11,2,10.5,'Negra'),
+(10,3,10.5,'Negra'),(11,3,8.5,'Negra'),
+(10,4,9.0,'Negra'),
+(10,5,7.3,'Negra'),
+(10,6,7.5,'Negra'),(11,6,10.3,'Negra'),
+(10,7,6.8,'Negra'),
+(10,8,8.5,'Negra'),(11,8,12.0,'Negra'),
+(10,9,6.0,'Negra'),
+(10,10,10.5,'Negra'),(11,10,8.5,'Negra'),
+(10,11,8.5,'Negra'),
+(10,12,10.5,'Negra'),
+(10,13,9.5,'Negra'),
+(10,14,7.8,'Negra');
 
 -- =============================================
 -- DATOS: PISTA_COMPUESTA
 -- =============================================
-INSERT INTO Pista_Compuesta (PistasCodigo_Estacion, Pista_1, Pista_2) VALUES
-(1,1,2),(1,2,3),(2,1,2),(2,2,3),(3,1,2),(3,2,3),
-(4,1,2),(5,1,2),(6,1,2),(6,2,3),(7,1,2),(8,1,2),
-(8,2,3),(9,1,2),(10,1,2),(10,2,3),(11,1,2),(12,1,2),
-(13,1,2),(14,1,2);
+INSERT INTO Pista_Compuesta (Pista_Compuesta, Pista_Componente, Codigo_Estacion) VALUES
+(10,1,1),(10,2,1),(11,2,1),(11,3,1),
+(10,1,2),(10,2,2),(11,2,2),(11,3,2),
+(10,1,3),(10,2,3),(11,2,3),(11,3,3),
+(10,1,4),(10,2,4),
+(10,1,5),(10,2,5),
+(10,1,6),(10,2,6),(11,2,6),(11,3,6),
+(10,1,7),(10,2,7),
+(10,1,8),(10,2,8),(11,2,8),(11,3,8),
+(10,1,9),(10,2,9),
+(10,1,10),(10,2,10),(11,2,10),(11,3,10),
+(10,1,11),(10,2,11),
+(10,1,12),(10,2,12),
+(10,1,13),(10,2,13),
+(10,1,14),(10,2,14);
 
 -- =============================================
 -- DATOS: PARTICIPANTES
@@ -373,10 +534,7 @@ INSERT INTO Participantes (Tipo) VALUES
 ('INDIVIDUAL'),('INDIVIDUAL'),('INDIVIDUAL'),('INDIVIDUAL'),('INDIVIDUAL'),
 ('EQUIPO'),('EQUIPO'),('EQUIPO'),('EQUIPO'),('EQUIPO'),
 ('EQUIPO'),('EQUIPO'),('EQUIPO'),('EQUIPO'),('EQUIPO'),
-('EQUIPO'),('EQUIPO'),('EQUIPO'),('EQUIPO'),('EQUIPO'),
-('INDIVIDUAL'),('INDIVIDUAL'),('INDIVIDUAL'),('INDIVIDUAL'),('INDIVIDUAL'),
-('INDIVIDUAL'),('INDIVIDUAL'),('INDIVIDUAL'),('INDIVIDUAL'),('INDIVIDUAL'),
-('INDIVIDUAL'),('INDIVIDUAL'),('INDIVIDUAL'),('INDIVIDUAL'),('INDIVIDUAL');
+('EQUIPO'),('EQUIPO'),('EQUIPO'),('EQUIPO'),('EQUIPO');
 
 -- =============================================
 -- DATOS: PARTICIPANTE INDIVIDUAL
@@ -384,9 +542,9 @@ INSERT INTO Participantes (Tipo) VALUES
 INSERT INTO [Participante indivi] (Id_participantes, DNI) VALUES
 (1,  22222222),(2,  66666666),(3,  10000004),(4,  10000008),
 (5,  20000004),(6,  30000004),(7,  40000004),(8,  50000004),
-(9,  60000004),(10, 70000002),(11, 22222222),(12, 66666666),
+(9,  60000004),(10, 80000004),(11, 22222222),(12, 66666666),
 (13, 10000004),(14, 10000008),(15, 20000004),(16, 30000004),
-(17, 40000004),(18, 50000004),(19, 60000004),(20, 70000002);
+(17, 40000004),(18, 50000004),(19, 60000004),(20, 80000004);
 
 -- =============================================
 -- DATOS: PARTICIPANTE EQUIPO
@@ -436,15 +594,22 @@ INSERT INTO Pruebas_Pistas (ID_Prueba, [Num secuanecial], Codigo_Estacion) VALUE
 -- =============================================
 -- DATOS: PARTICIPACION
 -- =============================================
-INSERT INTO Participacion (Id_participante, IdPrueba, Posicion) VALUES
+INSERT INTO Participacion (Id_participante, IdPrueba, Numero_Secuencial, Posicion)
+SELECT
+    Id_participante,
+    IdPrueba,
+    ROW_NUMBER() OVER (PARTITION BY IdPrueba ORDER BY Posicion, Id_participante) AS Numero_Secuencial,
+    Posicion
+FROM (VALUES
 (1,1,2),(2,3,1),(3,4,3),(4,2,1),(5,5,2),(6,6,1),(7,7,3),(8,8,2),
-(9,9,1),(10,10,3),(1,15,1),(2,18,1),(3,16,2),(4,16,3),(5,5,4),
-(6,6,2),(7,7,1),(8,8,1),(9,9,2),(10,10,1),(21,11,1),(22,12,1),
+(9,9,1),(10,10,3),(1,15,1),(2,18,1),(3,16,2),(4,16,3),(15,5,4),
+(16,6,2),(17,7,1),(18,8,1),(19,9,2),(20,10,1),(21,11,1),(22,12,1),
 (23,13,1),(24,14,2),(25,17,1),(26,19,1),(27,11,2),(28,13,3),
 (29,14,1),(30,12,3),(31,13,2),(32,17,2),(33,19,2),(34,11,3),
 (35,17,3),(1,20,3),(2,20,2),(21,20,1),(23,11,4),(25,11,5),
-(4,2,4),(6,6,3),(7,20,4),(9,15,5),(10,16,4),(22,20,2),(24,12,2),
-(26,19,3),(28,14,4),(29,17,4);
+(14,2,4),(11,6,3),(7,20,4),(9,15,5),(10,16,4),(22,20,2),(24,12,2),
+(32,19,3),(28,14,4),(29,17,4)
+) AS datos(Id_participante, IdPrueba, Posicion);
 
 -- =============================================
 -- DATOS: JORNADAS
@@ -456,17 +621,17 @@ INSERT INTO Jornadas (Id_participante, IdPrueba, fecha, TiempoParcial) VALUES
 (7,7,'2026-02-20',8900),(8,8,'2026-02-19',9300),(8,8,'2026-02-20',9300),
 (9,9,'2026-02-22',20100),(9,9,'2026-02-23',20100),(10,10,'2026-02-22',20750),
 (10,10,'2026-02-23',20750),(1,15,'2026-03-02',35000),(2,18,'2026-03-07',10500),
-(3,16,'2026-03-02',37500),(4,16,'2026-03-02',38000),(5,5,'2026-02-17',21000),
-(6,6,'2026-02-17',21800),(7,20,'2026-03-10',8850),(7,20,'2026-03-11',8850),
+(3,16,'2026-03-02',37500),(4,16,'2026-03-02',38000),(5,5,'2026-02-18',21000),
+(6,6,'2026-02-18',21800),(7,20,'2026-03-10',8850),(7,20,'2026-03-11',8850),
 (7,20,'2026-03-12',8800),(9,15,'2026-03-02',36000),(10,16,'2026-03-02',39000),
 (1,20,'2026-03-10',9100),(1,20,'2026-03-11',9100),(1,20,'2026-03-12',9000),
 (2,20,'2026-03-10',8900),(2,20,'2026-03-11',8800),(2,20,'2026-03-12',8800),
-(4,2,'2026-02-12',9600),(6,6,'2026-02-17',22000),(8,8,'2026-02-19',9400),
-(8,8,'2026-02-20',9200),(3,4,'2026-02-15',24000),(9,9,'2026-02-22',20500),
-(10,10,'2026-02-23',21000),(5,5,'2026-02-17',21500),(7,7,'2026-02-19',9100),
-(7,7,'2026-02-20',9100),(9,9,'2026-02-23',20200),(10,10,'2026-02-22',21200),
-(1,1,'2026-02-12',9300),(2,3,'2026-02-14',22500),(3,16,'2026-03-02',38500),
-(6,6,'2026-02-17',22300),(8,8,'2026-02-20',9500);
+(4,2,'2026-02-12',9600),(6,6,'2026-02-19',22000),(8,8,'2026-02-21',9400),
+(8,8,'2026-02-22',9200),(3,4,'2026-02-16',24000),(9,9,'2026-02-24',20500),
+(10,10,'2026-02-24',21000),(5,5,'2026-02-19',21500),(7,7,'2026-02-21',9100),
+(7,7,'2026-02-22',9100),(9,9,'2026-02-25',20200),(10,10,'2026-02-25',21200),
+(1,1,'2026-02-12',9300),(2,3,'2026-02-15',22500),(3,16,'2026-03-03',38500),
+(6,6,'2026-02-20',22300),(8,8,'2026-02-23',9500);
 
 -- =============================================
 -- DATOS: INTERVIENE
@@ -493,4 +658,42 @@ INSERT INTO interviene (DNI, IdTPrueba, Id_participantes, fecha, TiempoEmpleado,
 (20000001,11,25,'2026-02-25',18600,5),(20000002,11,25,'2026-02-26',18700,5),
 (40000001,17,29,'2026-03-04',24200,4),(40000002,17,29,'2026-03-05',24400,4),
 (60000001,19,32,'2026-03-08',14500,3),(60000002,19,32,'2026-03-08',14700,3);
+GO
+
+CREATE OR ALTER TRIGGER trg_Equipos_CapitanPertenece
+ON Equipos
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF EXISTS (
+        SELECT 1
+        FROM inserted
+        GROUP BY DniCapitan
+        HAVING COUNT(*) > 1
+    )
+    BEGIN
+        THROW 50008, 'Un capitan no puede asignarse a mas de un equipo.', 1;
+    END;
+
+    IF EXISTS (
+        SELECT 1
+        FROM inserted i
+        INNER JOIN Pertenece_Equipos pe ON pe.DNI = i.DniCapitan
+        WHERE pe.ID_Equipo <> i.Id_Equipo
+    )
+    BEGIN
+        THROW 50007, 'El capitan ya pertenece a otro equipo.', 1;
+    END;
+
+    INSERT INTO Pertenece_Equipos (DNI, ID_Equipo)
+    SELECT i.DniCapitan, i.Id_Equipo
+    FROM inserted i
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM Pertenece_Equipos pe
+        WHERE pe.DNI = i.DniCapitan
+    );
+END;
 GO

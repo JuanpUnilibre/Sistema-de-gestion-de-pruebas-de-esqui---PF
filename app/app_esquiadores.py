@@ -1,4 +1,6 @@
-﻿import tkinter as tk
+import re
+import tkinter as tk
+from datetime import date
 from tkinter import ttk, messagebox
 import pyodbc
 
@@ -49,6 +51,8 @@ TABLAS_GESTION = {
         "pk": ["Id_participantes"],
         "identity": ["Id_participantes"],
         "order": ["Id_participantes"],
+        "readonly": True,
+        "readonly_reason": "Participantes es la tabla base de los subtipos. Cree participantes desde Participante individual o Participante equipo para conservar la regla INDIVIDUAL/EQUIPO.",
         "columnas": [
             ("Id_participantes", "ID", "int"),
             ("Tipo", "Tipo", "text"),
@@ -101,13 +105,13 @@ TABLAS_GESTION = {
     },
     "Pista compuesta": {
         "tabla": "Pista_Compuesta",
-        "pk": ["PistasCodigo_Estacion", "Pista_1", "Pista_2"],
+        "pk": ["Codigo_Estacion", "Pista_Compuesta", "Pista_Componente"],
         "identity": [],
-        "order": ["PistasCodigo_Estacion", "Pista_1", "Pista_2"],
+        "order": ["Codigo_Estacion", "Pista_Compuesta", "Pista_Componente"],
         "columnas": [
-            ("PistasCodigo_Estacion", "Codigo estacion", "int"),
-            ("Pista_1", "Pista 1", "int"),
-            ("Pista_2", "Pista 2", "int"),
+            ("Codigo_Estacion", "Codigo estacion", "int"),
+            ("Pista_Compuesta", "Pista compuesta", "int"),
+            ("Pista_Componente", "Pista componente", "int"),
         ],
     },
     "Pruebas": {
@@ -115,6 +119,10 @@ TABLAS_GESTION = {
         "pk": ["IdTPrueba"],
         "identity": ["IdTPrueba"],
         "order": ["IdTPrueba"],
+        "insert_disabled": True,
+        "insert_disabled_reason": "Para crear una prueba nueva tambien debe registrar sus pistas, participantes y resultados relacionados.",
+        "readonly_fields": ["Tiempo_Ganador", "Codigo_Estacion", "ID_Ganador"],
+        "help": "Puede editar nombre, tipo y fechas. El ganador y el tiempo ganador se recalculan con el procedimiento; la estacion queda fija para no romper las pistas asociadas.",
         "columnas": [
             ("IdTPrueba", "ID prueba", "int"),
             ("Nombre", "Nombre", "text"),
@@ -163,7 +171,8 @@ TABLAS_GESTION = {
     "Participante individual": {
         "tabla": "Participante indivi",
         "pk": ["Id_participantes"],
-        "identity": [],
+        "identity": ["Id_participantes"],
+        "auto_participante_tipo": "INDIVIDUAL",
         "order": ["Id_participantes"],
         "columnas": [
             ("Id_participantes", "ID participante", "int"),
@@ -173,7 +182,8 @@ TABLAS_GESTION = {
     "Participante equipo": {
         "tabla": "ParticipanteEqupo",
         "pk": ["Id_participantes"],
-        "identity": [],
+        "identity": ["Id_participantes"],
+        "auto_participante_tipo": "EQUIPO",
         "order": ["Id_participantes"],
         "columnas": [
             ("Id_participantes", "ID participante", "int"),
@@ -188,6 +198,7 @@ TABLAS_GESTION = {
         "columnas": [
             ("Id_participante", "ID participante", "int"),
             ("IdPrueba", "ID prueba", "int"),
+            ("Numero_Secuencial", "Num. secuencial", "int"),
             ("Posicion", "Posicion", "int"),
         ],
     },
@@ -265,6 +276,47 @@ MODULOS_GESTION = {
 
 def q(nombre):
     return f"[{nombre.replace(']', ']]')}]"
+
+
+REGLAS_SQL = {
+    "Federa": "La federacion indicada no existe. Revise el campo ID Federacion.",
+    "Es capitan": "El DNI del capitan no existe en Esquiadores.",
+    "administra": "La federacion indicada no existe.",
+    "administrada por": "La estacion indicada no existe.",
+    "Tiene": "La estacion indicada para la pista no existe.",
+    "pista compuesta existe": "La pista compuesta debe existir en Pistas para esa estacion.",
+    "pista componente existe": "La pista componente debe existir en Pistas para esa estacion.",
+    "sede de": "La estacion indicada para la prueba no existe.",
+    "gana": "El ganador indicado no existe en Participantes.",
+    "pertenece a": "El equipo indicado no existe.",
+    "Integra": "El DNI indicado no existe en Esquiadores.",
+    "se usa para": "La prueba indicada no existe.",
+    "usa pistas de su estacion": "La pista debe pertenecer a la misma estacion de la prueba.",
+    "es usada en": "La pista indicada no existe para esa estacion.",
+    "pertenece": "El DNI indicado no existe en Esquiadores.",
+    "subtiip": "El participante individual indicado no existe en Participantes.",
+    "subtipo": "El participante de equipo indicado no existe en Participantes.",
+    "compite": "El participante indicado no existe.",
+    "FKParticipac554505": "La prueba indicada no existe.",
+    "es en la": "La jornada debe corresponder a una participacion ya registrada.",
+    "interve": "El DNI indicado no existe en Esquiadores.",
+    "es prueba": "La prueba indicada no existe.",
+    "FKinterviene214810": "El participante de equipo indicado no existe.",
+    "equipo participa en prueba": "El equipo debe estar registrado en Participacion para esa prueba.",
+    "FK_Pruebas_Ganador_Participacion": "El ganador debe estar registrado como participante de esa misma prueba.",
+}
+
+
+MENSAJES_NEGOCIO = (
+    "El participante individual debe tener Tipo = INDIVIDUAL.",
+    "Un esquiador de equipo no puede registrarse como participante individual.",
+    "El participante de equipo debe tener Tipo = EQUIPO.",
+    "Un esquiador individual no puede registrarse como miembro de equipo.",
+    "Las jornadas solo registran tiempos de participantes individuales.",
+    "El esquiador que interviene debe pertenecer al equipo participante.",
+    "El capitan ya pertenece a otro equipo.",
+    "Un capitan no puede asignarse a mas de un equipo.",
+)
 
 
 class AppEsquiadores(tk.Tk):
@@ -516,7 +568,8 @@ class AppEsquiadores(tk.Tk):
         self.cbo_tablas.pack(side=tk.LEFT, padx=(0, 8))
         self.cbo_tablas.bind("<<ComboboxSelected>>", self.cambiar_tabla_generica)
         ttk.Button(selector, text="Actualizar", command=self.cargar_tabla_generica).pack(side=tk.LEFT, padx=(0, 8))
-        ttk.Button(selector, text="Nuevo", command=self.nuevo_generico).pack(side=tk.LEFT, padx=(0, 8))
+        self.btn_nuevo_generico = ttk.Button(selector, text="Nuevo", command=self.nuevo_generico)
+        self.btn_nuevo_generico.pack(side=tk.LEFT, padx=(0, 8))
         self.btn_guardar_generico = ttk.Button(selector, text="Guardar nuevo", style="Accent.TButton", command=self.guardar_generico)
         self.btn_guardar_generico.pack(side=tk.LEFT, padx=(0, 8))
         self.lbl_modo_generico = ttk.Label(selector, text="Modo: nuevo")
@@ -524,8 +577,8 @@ class AppEsquiadores(tk.Tk):
 
         cuerpo = ttk.Frame(pagina)
         cuerpo.pack(fill=tk.BOTH, expand=True)
-        cuerpo.columnconfigure(0, weight=3)
-        cuerpo.columnconfigure(1, weight=2)
+        cuerpo.columnconfigure(0, weight=3,minsize=0)
+        cuerpo.columnconfigure(1, weight=2, minsize=280)
         cuerpo.rowconfigure(0, weight=1)
 
         tabla_marco = ttk.LabelFrame(cuerpo, text="Registros", padding=10)
@@ -545,13 +598,13 @@ class AppEsquiadores(tk.Tk):
         self.formulario_generico.grid(row=0, column=1, sticky="nsew")
         self.formulario_generico.columnconfigure(0, weight=1)
 
-        ayuda = ttk.Label(
+        self.ayuda_generica = ttk.Label(
             self.formulario_generico,
             text="Use los ID existentes para campos relacionados. Ejemplo: ID_Federacion debe existir en federaciones.",
             wraplength=310,
             foreground="#4b5563",
         )
-        ayuda.grid(row=99, column=0, sticky="ew", pady=(14, 0))
+        self.ayuda_generica.grid(row=99, column=0, sticky="ew", pady=(14, 0))
 
         self.construir_formulario_generico()
 
@@ -573,7 +626,7 @@ class AppEsquiadores(tk.Tk):
         ).pack(anchor="w")
         ttk.Label(
             panel,
-            text="Esta accion ejecuta sp_Recalcular_Tiempo_Ganador y muestra cuantas pruebas fueron procesadas.",
+            text="Esta accion compara el ganador guardado con el menor tiempo calculado y muestra el antes y despues.",
             background="white",
             foreground="#4b5563",
             wraplength=760,
@@ -585,6 +638,25 @@ class AppEsquiadores(tk.Tk):
             style="Accent.TButton",
             command=self.ejecutar_procedimiento,
         ).pack(anchor="w")
+
+        self.lbl_procedimiento_resumen = ttk.Label(
+            pagina,
+            text="Ejecute el procedimiento para ver aqui los cambios.",
+            style="Subtitulo.TLabel",
+        )
+        self.lbl_procedimiento_resumen.pack(anchor="w", pady=(16, 8))
+
+        resultado_marco = ttk.LabelFrame(pagina, text="Resultado del recalculo", padding=10)
+        resultado_marco.pack(fill=tk.BOTH, expand=True)
+        self.tabla_procedimiento = ttk.Treeview(resultado_marco, show="headings")
+        scroll_y = ttk.Scrollbar(resultado_marco, orient=tk.VERTICAL, command=self.tabla_procedimiento.yview)
+        scroll_x = ttk.Scrollbar(resultado_marco, orient=tk.HORIZONTAL, command=self.tabla_procedimiento.xview)
+        self.tabla_procedimiento.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
+        self.tabla_procedimiento.grid(row=0, column=0, sticky="nsew")
+        scroll_y.grid(row=0, column=1, sticky="ns")
+        scroll_x.grid(row=1, column=0, sticky="ew")
+        resultado_marco.columnconfigure(0, weight=1)
+        resultado_marco.rowconfigure(0, weight=1)
 
     def mostrar_pantalla(self, clave):
         self.pantalla_actual = clave
@@ -641,12 +713,26 @@ class AppEsquiadores(tk.Tk):
 
     def actualizar_modo_generico(self, modo):
         self.modo_generico = modo
+        config = self.config_tabla_actual()
+        solo_lectura = config.get("readonly", False)
+        solo_edicion = config.get("insert_disabled", False)
         if hasattr(self, "lbl_modo_generico"):
-            texto = "Modo: nuevo" if modo == "nuevo" else "Modo: edicion"
+            if solo_lectura:
+                texto = "Modo: solo lectura"
+            elif modo == "nuevo" and solo_edicion:
+                texto = "Modo: edicion solamente"
+            else:
+                texto = "Modo: nuevo" if modo == "nuevo" else "Modo: edicion"
             self.lbl_modo_generico.configure(text=texto)
+        if hasattr(self, "btn_nuevo_generico"):
+            self.btn_nuevo_generico.configure(state="disabled" if solo_lectura or solo_edicion else "normal")
         if hasattr(self, "btn_guardar_generico"):
             texto = "Guardar nuevo" if modo == "nuevo" else "Guardar cambios"
-            self.btn_guardar_generico.configure(text=texto)
+            guardar_bloqueado = solo_lectura or (modo == "nuevo" and solo_edicion)
+            self.btn_guardar_generico.configure(
+                text=texto,
+                state="disabled" if guardar_bloqueado else "normal",
+            )
 
     def construir_formulario_generico(self):
         for widget in self.formulario_generico.grid_slaves():
@@ -655,6 +741,24 @@ class AppEsquiadores(tk.Tk):
 
         self.campos_genericos = {}
         config = self.config_tabla_actual()
+
+        if hasattr(self, "ayuda_generica"):
+            self.ayuda_generica.configure(
+                text=config.get(
+                    "help",
+                    "Use los ID existentes para campos relacionados. Las reglas de negocio se validan antes de guardar.",
+                ),
+            )
+
+        if config.get("readonly", False):
+            ttk.Label(
+                self.formulario_generico,
+                text=config.get("readonly_reason", "Esta tabla se consulta en solo lectura."),
+                wraplength=310,
+                foreground="#4b5563",
+            ).grid(row=0, column=0, sticky="ew", pady=(0, 8))
+            self.actualizar_modo_generico("solo lectura")
+            return
 
         for fila, (columna, etiqueta, tipo) in enumerate(config["columnas"]):
             ttk.Label(self.formulario_generico, text=etiqueta).grid(row=fila * 2, column=0, sticky="w", pady=(0, 2))
@@ -678,7 +782,7 @@ class AppEsquiadores(tk.Tk):
 
         for columna, etiqueta, _ in config["columnas"]:
             self.tabla_generica.heading(columna, text=etiqueta)
-            self.tabla_generica.column(columna, width=135, minwidth=95)
+            self.tabla_generica.column(columna, width=135, minwidth=95, stretch=False)
 
         select_cols = ", ".join(q(col) for col in columnas)
         order_cols = ", ".join(q(col) for col in config["order"])
@@ -694,17 +798,19 @@ class AppEsquiadores(tk.Tk):
                     valores.append("" if valor is None else str(valor))
                 self.tabla_generica.insert("", tk.END, values=valores)
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            self.mostrar_error(e)
 
     def limpiar_generico(self):
         self.registro_generico_seleccionado = None
         self.actualizar_modo_generico("nuevo")
         config = self.config_tabla_actual()
+        solo_edicion = config.get("insert_disabled", False)
+        campos_bloqueados = set(config["identity"]) | set(config.get("readonly_fields", []))
 
         for columna, entrada in self.campos_genericos.items():
             entrada.configure(state="normal")
             entrada.delete(0, tk.END)
-            if columna in config["identity"]:
+            if solo_edicion or columna in campos_bloqueados:
                 entrada.configure(state="disabled")
 
         if hasattr(self, "tabla_generica"):
@@ -714,9 +820,16 @@ class AppEsquiadores(tk.Tk):
             self.tabla_generica.focus("")
 
     def nuevo_generico(self):
+        config = self.config_tabla_actual()
+        if config.get("readonly", False):
+            messagebox.showinfo("Solo lectura", "Esta tabla no se registra manualmente desde la aplicacion.")
+            return
+        if config.get("insert_disabled", False):
+            messagebox.showinfo("Edicion solamente", config.get("insert_disabled_reason", "Esta tabla solo permite editar registros existentes."))
+            return
         self.limpiar_generico()
         for columna, entrada in self.campos_genericos.items():
-            if columna not in self.config_tabla_actual()["identity"]:
+            if columna not in config["identity"] and columna not in config.get("readonly_fields", []):
                 entrada.focus_set()
                 break
 
@@ -731,22 +844,92 @@ class AppEsquiadores(tk.Tk):
         datos = dict(zip(columnas, valores))
         self.registro_generico_seleccionado = {pk: datos[pk] for pk in config["pk"]}
         self.actualizar_modo_generico("editar")
+        campos_bloqueados = set(config["identity"]) | set(config["pk"]) | set(config.get("readonly_fields", []))
 
         for columna, entrada in self.campos_genericos.items():
             entrada.configure(state="normal")
             entrada.delete(0, tk.END)
             entrada.insert(0, datos.get(columna, ""))
-            if columna in config["identity"] or columna in config["pk"]:
+            if columna in campos_bloqueados:
                 entrada.configure(state="disabled")
+
+    def mensaje_error_usuario(self, error):
+        texto = " ".join(str(error).replace("\r", " ").replace("\n", " ").split())
+
+        for mensaje in MENSAJES_NEGOCIO:
+            if mensaje in texto:
+                return mensaje
+
+        for restriccion, mensaje in REGLAS_SQL.items():
+            if restriccion in texto:
+                return mensaje
+
+        if "PRIMARY KEY constraint" in texto or "UNIQUE KEY constraint" in texto:
+            duplicado = re.search(r"The duplicate key value is \\((.*?)\\)", texto)
+            detalle = f" Valor repetido: {duplicado.group(1)}." if duplicado else ""
+            return f"Ya existe un registro con la misma clave o valor unico.{detalle}"
+
+        if "FOREIGN KEY constraint" in texto or "REFERENCE constraint" in texto:
+            return "El registro usa un ID relacionado que no existe, o intenta eliminar un dato que ya esta siendo usado por otra tabla."
+
+        if "CHECK constraint" in texto:
+            return "El valor ingresado no cumple una regla de validacion. Revise que numeros sean positivos, dificultad sea Azul/Verde/Roja/Negra y fechas sean coherentes."
+
+        if "Conversion failed" in texto or "converting" in texto:
+            return "Hay un valor con formato incorrecto. Revise numeros enteros, decimales y fechas con formato AAAA-MM-DD."
+
+        if "Login timeout" in texto or "SQL Server" in texto and "connection" in texto.lower():
+            return "No se pudo conectar con SQL Server. Verifique que SQLEXPRESS este iniciado y que la base esqui_olimpico exista."
+
+        return f"No se pudo completar la operacion. Detalle: {texto}"
+
+    def mostrar_error(self, error):
+        messagebox.showerror("Error", self.mensaje_error_usuario(error))
+
+    def validar_valores_basicos(self, valores):
+        if "num_Federados" in valores and valores["num_Federados"] < 0:
+            raise ValueError("Num. federados no puede ser negativo.")
+        if "Edad" in valores and valores["Edad"] <= 0:
+            raise ValueError("Edad debe ser mayor que cero.")
+        if "Km_Esquiables" in valores and valores["Km_Esquiables"] <= 0:
+            raise ValueError("Km esquiables debe ser mayor que cero.")
+        if "kilometros" in valores and valores["kilometros"] <= 0:
+            raise ValueError("Kilometros debe ser mayor que cero.")
+        if "Tiempo_Ganador" in valores and valores["Tiempo_Ganador"] <= 0:
+            raise ValueError("Tiempo ganador debe ser mayor que cero.")
+        if "TiempoParcial" in valores and valores["TiempoParcial"] <= 0:
+            raise ValueError("Tiempo parcial debe ser mayor que cero.")
+        if "TiempoEmpleado" in valores and valores["TiempoEmpleado"] <= 0:
+            raise ValueError("Tiempo empleado debe ser mayor que cero.")
+        if "Numero_Secuencial" in valores and valores["Numero_Secuencial"] <= 0:
+            raise ValueError("Num. secuencial debe ser mayor que cero.")
+        if "Posicion" in valores and valores["Posicion"] <= 0:
+            raise ValueError("Posicion debe ser mayor que cero.")
+        if "GradoDificultas" in valores and valores["GradoDificultas"] not in ("Azul", "Verde", "Roja", "Negra"):
+            raise ValueError("Dificultad debe ser Azul, Verde, Roja o Negra.")
+        if "Fecha_inicio_Prevista" in valores and "fecha_fin_Previsra" in valores:
+            if valores["Fecha_inicio_Prevista"] > valores["fecha_fin_Previsra"]:
+                raise ValueError("Fecha inicio no puede ser posterior a Fecha fin.")
 
     def convertir_valor(self, valor, tipo, etiqueta):
         valor = valor.strip()
         if valor == "":
             raise ValueError(f"El campo {etiqueta} no puede estar vacio")
         if tipo == "int":
-            return int(valor)
+            try:
+                return int(valor)
+            except ValueError as exc:
+                raise ValueError(f"El campo {etiqueta} debe ser un numero entero.") from exc
         if tipo in ("float", "decimal"):
-            return float(valor)
+            try:
+                return float(valor)
+            except ValueError as exc:
+                raise ValueError(f"El campo {etiqueta} debe ser un numero valido.") from exc
+        if tipo == "date":
+            try:
+                return date.fromisoformat(valor)
+            except ValueError as exc:
+                raise ValueError(f"El campo {etiqueta} debe tener formato AAAA-MM-DD.") from exc
         return valor
 
     def valores_formulario_generico(self, incluir_pk=False):
@@ -756,6 +939,8 @@ class AppEsquiadores(tk.Tk):
         for columna, etiqueta, tipo in config["columnas"]:
             if columna in config["identity"]:
                 continue
+            if columna in config.get("readonly_fields", []):
+                continue
             if not incluir_pk and self.registro_generico_seleccionado is not None and columna in config["pk"]:
                 continue
 
@@ -764,8 +949,138 @@ class AppEsquiadores(tk.Tk):
 
         return valores
 
+    def validar_reglas_negocio(self, cursor, valores):
+        self.validar_valores_basicos(valores)
+        tabla = self.tabla_actual
+
+        if tabla == "Equipos":
+            equipo = valores.get("Id_Equipo")
+            capitan = valores["DniCapitan"]
+            if cursor.execute("SELECT 1 FROM Esquiadores WHERE DNI = ?", capitan).fetchone() is None:
+                raise ValueError("El DNI del capitan no existe en Esquiadores.")
+            if cursor.execute("SELECT 1 FROM [Participante indivi] WHERE DNI = ?", capitan).fetchone():
+                raise ValueError("El capitan no puede estar registrado como participante individual.")
+            fila = cursor.execute("SELECT ID_Equipo FROM Pertenece_Equipos WHERE DNI = ?", capitan).fetchone()
+            if fila is not None and (equipo is None or int(fila.ID_Equipo) != int(equipo)):
+                raise ValueError("El capitan ya pertenece a otro equipo.")
+
+        elif tabla == "Participante individual":
+            participante = valores["Id_participantes"]
+            dni = valores["DNI"]
+            fila = cursor.execute(
+                "SELECT Tipo FROM Participantes WHERE Id_participantes = ?",
+                participante,
+            ).fetchone()
+            if fila is None or fila.Tipo != "INDIVIDUAL":
+                raise ValueError("El ID participante debe existir en Participantes con Tipo = INDIVIDUAL")
+            if cursor.execute("SELECT 1 FROM Pertenece_Equipos WHERE DNI = ?", dni).fetchone():
+                raise ValueError("Ese DNI ya pertenece a un equipo y no puede actuar como individual")
+
+        elif tabla == "Participante equipo":
+            participante = valores["Id_participantes"]
+            fila = cursor.execute(
+                "SELECT Tipo FROM Participantes WHERE Id_participantes = ?",
+                participante,
+            ).fetchone()
+            if fila is None or fila.Tipo != "EQUIPO":
+                raise ValueError("El ID participante debe existir en Participantes con Tipo = EQUIPO")
+
+        elif tabla == "Pertenece a equipos":
+            dni = valores["DNI"]
+            if cursor.execute("SELECT 1 FROM [Participante indivi] WHERE DNI = ?", dni).fetchone():
+                raise ValueError("Ese esquiador ya participa a titulo individual y no puede pertenecer a un equipo")
+
+        elif tabla == "Participacion":
+            participante = valores["Id_participante"]
+            prueba = valores["IdPrueba"]
+            numero = valores["Numero_Secuencial"]
+            if cursor.execute(
+                """
+                SELECT 1
+                FROM Participacion
+                WHERE IdPrueba = ?
+                  AND Numero_Secuencial = ?
+                  AND Id_participante <> ?
+                """,
+                prueba,
+                numero,
+                participante,
+            ).fetchone():
+                raise ValueError("El numero secuencial ya esta usado por otro participante en esa prueba")
+
+        elif tabla == "Jornadas":
+            participante = valores["Id_participante"]
+            if cursor.execute(
+                "SELECT 1 FROM [Participante indivi] WHERE Id_participantes = ?",
+                participante,
+            ).fetchone() is None:
+                raise ValueError("Las jornadas solo aceptan participantes individuales")
+
+        elif tabla == "Intervenciones":
+            dni = valores["DNI"]
+            prueba = valores["IdTPrueba"]
+            participante = valores["Id_participantes"]
+            if cursor.execute(
+                """
+                SELECT 1
+                FROM ParticipanteEqupo pte
+                INNER JOIN Pertenece_Equipos pe ON pe.ID_Equipo = pte.Id_Equipo
+                WHERE pte.Id_participantes = ?
+                  AND pe.DNI = ?
+                """,
+                participante,
+                dni,
+            ).fetchone() is None:
+                raise ValueError("El DNI debe pertenecer al equipo asociado a ese participante")
+            if cursor.execute(
+                """
+                SELECT 1
+                FROM Participacion
+                WHERE Id_participante = ?
+                  AND IdPrueba = ?
+                """,
+                participante,
+                prueba,
+            ).fetchone() is None:
+                raise ValueError("El equipo debe estar registrado en Participacion para esa prueba")
+
+        elif tabla == "Pruebas por pistas":
+            prueba = valores["ID_Prueba"]
+            estacion = valores["Codigo_Estacion"]
+            fila = cursor.execute(
+                "SELECT Codigo_Estacion FROM Pruebas WHERE IdTPrueba = ?",
+                prueba,
+            ).fetchone()
+            if fila is None or int(fila.Codigo_Estacion) != int(estacion):
+                raise ValueError("La pista debe pertenecer a la misma estacion de la prueba")
+
+        elif tabla == "Pista compuesta":
+            estacion = valores["Codigo_Estacion"]
+            compuesta = valores["Pista_Compuesta"]
+            componente = valores["Pista_Componente"]
+            if int(compuesta) == int(componente):
+                raise ValueError("Una pista compuesta no puede componerse de si misma")
+            for pista, etiqueta in ((compuesta, "compuesta"), (componente, "componente")):
+                if cursor.execute(
+                    """
+                    SELECT 1
+                    FROM Pistas
+                    WHERE [Num secuanecial] = ?
+                      AND Codigo_Estacion = ?
+                    """,
+                    pista,
+                    estacion,
+                ).fetchone() is None:
+                    raise ValueError(f"La pista {etiqueta} debe existir en la misma estacion")
+
     def guardar_generico(self):
         config = self.config_tabla_actual()
+        if config.get("readonly", False):
+            messagebox.showinfo("Solo lectura", "Esta tabla no se modifica manualmente desde la aplicacion.")
+            return
+        if self.modo_generico == "nuevo" and config.get("insert_disabled", False):
+            messagebox.showinfo("Edicion solamente", config.get("insert_disabled_reason", "Esta tabla solo permite editar registros existentes."))
+            return
 
         try:
             with conectar() as conn:
@@ -773,6 +1088,13 @@ class AppEsquiadores(tk.Tk):
 
                 if self.modo_generico == "nuevo":
                     valores = self.valores_formulario_generico(incluir_pk=True)
+                    if config.get("auto_participante_tipo"):
+                        cursor.execute(
+                            "INSERT INTO Participantes (Tipo) OUTPUT INSERTED.Id_participantes VALUES (?)",
+                            config["auto_participante_tipo"],
+                        )
+                        valores["Id_participantes"] = int(cursor.fetchone()[0])
+                    self.validar_reglas_negocio(cursor, valores)
                     columnas = list(valores.keys())
                     parametros = ", ".join("?" for _ in columnas)
                     sql = f"INSERT INTO {q(config['tabla'])} ({', '.join(q(c) for c in columnas)}) VALUES ({parametros})"
@@ -786,6 +1108,8 @@ class AppEsquiadores(tk.Tk):
                     if not valores:
                         messagebox.showwarning("Aviso", "No hay campos editables para actualizar")
                         return
+                    datos_completos = {**self.registro_generico_seleccionado, **valores}
+                    self.validar_reglas_negocio(cursor, datos_completos)
                     sets = ", ".join(f"{q(c)} = ?" for c in valores)
                     where = " AND ".join(f"{q(pk)} = ?" for pk in config["pk"])
                     sql = f"UPDATE {q(config['tabla'])} SET {sets} WHERE {where}"
@@ -803,7 +1127,7 @@ class AppEsquiadores(tk.Tk):
         except ValueError as e:
             messagebox.showwarning("Aviso", str(e))
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            self.mostrar_error(e)
 
     def eliminar_generico(self):
         config = self.config_tabla_actual()
@@ -833,7 +1157,7 @@ class AppEsquiadores(tk.Tk):
             self.cargar_federaciones()
             self.cargar_esquiadores()
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            self.mostrar_error(e)
 
     def cargar_federaciones(self):
         try:
@@ -846,7 +1170,7 @@ class AppEsquiadores(tk.Tk):
             if filas:
                 self.cbo_federacion.current(0)
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            self.mostrar_error(e)
 
     def cargar_esquiadores(self):
         try:
@@ -862,7 +1186,7 @@ class AppEsquiadores(tk.Tk):
             for f in filas:
                 self.tabla.insert("", tk.END, values=(f.DNI, f.Nombre, f.Edad, f.ID_Federacion, f.Federacion))
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            self.mostrar_error(e)
 
     def limpiar(self):
         self.dni_seleccionado = None
@@ -891,9 +1215,13 @@ class AppEsquiadores(tk.Tk):
 
     def guardar(self):
         try:
-            dni = int(self.txt_dni.get())
+            dni = self.convertir_valor(self.txt_dni.get(), "int", "DNI")
             nombre = self.txt_nombre.get().strip()
-            edad = int(self.txt_edad.get())
+            edad = self.convertir_valor(self.txt_edad.get(), "int", "Edad")
+            self.validar_valores_basicos({"Edad": edad})
+            if self.cbo_federacion.get() not in self.federaciones:
+                messagebox.showwarning("Aviso", "Seleccione una federacion valida.")
+                return
             id_federacion = self.federaciones[self.cbo_federacion.get()]
 
             if nombre == "":
@@ -919,17 +1247,66 @@ class AppEsquiadores(tk.Tk):
             messagebox.showinfo("Correcto", mensaje)
             self.cargar_esquiadores()
             self.limpiar()
+        except ValueError as e:
+            messagebox.showwarning("Aviso", str(e))
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            self.mostrar_error(e)
 
     def ejecutar_procedimiento(self):
         try:
             with conectar() as conn:
-                fila = conn.cursor().execute("EXEC sp_Recalcular_Tiempo_Ganador").fetchone()
+                cursor = conn.cursor()
+                cursor.execute("EXEC sp_Recalcular_Tiempo_Ganador")
+                filas = cursor.fetchall()
+                columnas = [columna[0] for columna in cursor.description] if cursor.description else []
                 conn.commit()
-            messagebox.showinfo("Procedimiento", f"Pruebas procesadas: {fila.PruebasProcesadas}")
+
+            self.tabla_procedimiento.delete(*self.tabla_procedimiento.get_children())
+            self.tabla_procedimiento["columns"] = columnas
+
+            anchos = {
+                "IdPrueba": 80,
+                "Prueba": 260,
+                "Ganador_Anterior": 130,
+                "Tiempo_Anterior": 130,
+                "Ganador_Calculado": 140,
+                "Tiempo_Calculado": 140,
+                "Estado": 110,
+                "PruebasProcesadas": 140,
+            }
+            for columna in columnas:
+                self.tabla_procedimiento.heading(columna, text=columna)
+                self.tabla_procedimiento.column(
+                    columna,
+                    width=anchos.get(columna, 130),
+                    minwidth=80,
+                    stretch=columna == "Prueba",
+                )
+
+            actualizados = 0
+            procesadas = 0
+            for fila in filas:
+                datos = dict(zip(columnas, fila))
+                if datos.get("Estado") == "Actualizado":
+                    actualizados += 1
+                if "PruebasProcesadas" in datos:
+                    procesadas = datos["PruebasProcesadas"]
+                self.tabla_procedimiento.insert(
+                    "",
+                    tk.END,
+                    values=["" if valor is None else str(valor) for valor in fila],
+                )
+
+            self.lbl_procedimiento_resumen.configure(
+                text=f"Pruebas procesadas: {procesadas}. Cambios realizados: {actualizados}."
+            )
+            self.cargar_esquiadores()
+            messagebox.showinfo(
+                "Procedimiento",
+                "Recalculo terminado. Revise la tabla de resultados para ver el antes y despues.",
+            )
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            self.mostrar_error(e)
 
 
 if __name__ == "__main__":

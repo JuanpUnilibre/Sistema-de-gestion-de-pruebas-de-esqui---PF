@@ -1,4 +1,4 @@
-USE esqui_olimpico;
+﻿USE esqui_olimpico;
 GO
 
 /* ============================================================
@@ -20,6 +20,7 @@ INNER JOIN [Estaciones de esqui] ee
     ON ee.Codigo_Estacion = pr.Codigo_Estacion
 INNER JOIN Pruebas_Pistas pp
     ON pp.ID_Prueba = pr.IdTPrueba
+   AND pp.Codigo_Estacion = pr.Codigo_Estacion
 INNER JOIN Pistas pi
     ON pi.Codigo_Estacion = pp.Codigo_Estacion
    AND pi.[Num secuanecial] = pp.[Num secuanecial];
@@ -32,6 +33,7 @@ SELECT
     p.Id_participantes,
     p.Tipo AS Tipo_Participante,
     pr.Nombre AS Prueba,
+    pa.Numero_Secuencial,
     pa.Posicion,
     j.fecha,
     j.TiempoParcial

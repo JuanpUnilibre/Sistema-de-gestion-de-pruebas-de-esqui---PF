@@ -1,4 +1,4 @@
-USE esqui_olimpico;
+﻿USE esqui_olimpico;
 GO
 
 /* ============================================================
@@ -13,8 +13,22 @@ BEGIN
     SET NOCOUNT ON;
 
     DECLARE @IdPrueba int;
+    DECLARE @NombrePrueba varchar(255);
+    DECLARE @GanadorAnterior int;
+    DECLARE @TiempoAnterior decimal(19,0);
     DECLARE @TiempoGanador decimal(19,0);
+    DECLARE @IdGanador int;
     DECLARE @PruebasProcesadas int = 0;
+
+    DECLARE @Cambios TABLE (
+        IdPrueba int NOT NULL,
+        Prueba varchar(255) NOT NULL,
+        Ganador_Anterior int NOT NULL,
+        Tiempo_Anterior decimal(19,0) NOT NULL,
+        Ganador_Calculado int NOT NULL,
+        Tiempo_Calculado decimal(19,0) NOT NULL,
+        Estado varchar(40) NOT NULL
+    );
 
     DECLARE cursor_pruebas CURSOR LOCAL FAST_FORWARD FOR
         SELECT IdTPrueba
@@ -25,7 +39,19 @@ BEGIN
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
-        SELECT @TiempoGanador = MIN(TiempoTotal)
+        SET @TiempoGanador = NULL;
+        SET @IdGanador = NULL;
+
+        SELECT
+            @NombrePrueba = Nombre,
+            @GanadorAnterior = ID_Ganador,
+            @TiempoAnterior = Tiempo_Ganador
+        FROM Pruebas
+        WHERE IdTPrueba = @IdPrueba;
+
+        SELECT TOP 1
+            @IdGanador = Id_participante,
+            @TiempoGanador = TiempoTotal
         FROM (
             SELECT
                 Id_participante,
@@ -42,12 +68,33 @@ BEGIN
             FROM interviene
             WHERE IdTPrueba = @IdPrueba
             GROUP BY Id_participantes
-        ) tiempos;
+        ) tiempos
+        ORDER BY TiempoTotal, Id_participante;
 
         IF @TiempoGanador IS NOT NULL
         BEGIN
+            INSERT INTO @Cambios (
+                IdPrueba, Prueba, Ganador_Anterior, Tiempo_Anterior,
+                Ganador_Calculado, Tiempo_Calculado, Estado
+            )
+            VALUES (
+                @IdPrueba,
+                @NombrePrueba,
+                @GanadorAnterior,
+                @TiempoAnterior,
+                @IdGanador,
+                @TiempoGanador,
+                CASE
+                    WHEN @GanadorAnterior <> @IdGanador
+                      OR @TiempoAnterior <> @TiempoGanador
+                    THEN 'Actualizado'
+                    ELSE 'Sin cambio'
+                END
+            );
+
             UPDATE Pruebas
-            SET Tiempo_Ganador = @TiempoGanador
+            SET Tiempo_Ganador = @TiempoGanador,
+                ID_Ganador = @IdGanador
             WHERE IdTPrueba = @IdPrueba;
 
             SET @PruebasProcesadas = @PruebasProcesadas + 1;
@@ -59,7 +106,19 @@ BEGIN
     CLOSE cursor_pruebas;
     DEALLOCATE cursor_pruebas;
 
-    SELECT @PruebasProcesadas AS PruebasProcesadas;
+    SELECT
+        IdPrueba,
+        Prueba,
+        Ganador_Anterior,
+        Tiempo_Anterior,
+        Ganador_Calculado,
+        Tiempo_Calculado,
+        Estado,
+        @PruebasProcesadas AS PruebasProcesadas
+    FROM @Cambios
+    ORDER BY
+        CASE WHEN Estado = 'Actualizado' THEN 0 ELSE 1 END,
+        IdPrueba;
 END;
 GO
 

@@ -1,4 +1,4 @@
-USE esqui_olimpico;
+﻿USE esqui_olimpico;
 GO
 
 /* ============================================================
@@ -16,6 +16,7 @@ DECLARE @prueba int;
 DECLARE @estacion int;
 DECLARE @pista int;
 DECLARE @pista2 int;
+DECLARE @numero int;
 DECLARE @fecha date;
 
 DECLARE @FederacionesExtra TABLE (Nombre varchar(255), num_Federados int);
@@ -94,7 +95,7 @@ INSERT INTO @EstacionesExtra VALUES
 ('Yongpyong Resort', 'Min Seo Park', 'Gangwon, Corea del Sur', 823300108, 75),
 ('Levi Ski Resort', 'Aino Korhonen', 'Laponia, Finlandia', 358300109, 43),
 ('Ruka Ski Resort', 'Mika Virtanen', 'Kuusamo, Finlandia', 358300110, 35),
-('Jasna Nizke Tatry', 'Peter Novak', 'Demänovska Dolina, Eslovaquia', 421300111, 50),
+('Jasna Nizke Tatry', 'Peter Novak', 'DemÃ¤novska Dolina, Eslovaquia', 421300111, 50),
 ('Spindleruv Mlyn', 'Jan Dvorak', 'Krkonose, Republica Checa', 420300112, 25),
 ('Kranjska Gora', 'Luka Zupan', 'Alta Carniola, Eslovenia', 386300113, 20),
 ('Bansko Ski Resort', 'Ivan Petrov', 'Blagoevgrad, Bulgaria', 359300114, 75),
@@ -156,7 +157,32 @@ INSERT INTO @EsquiadoresExtra VALUES
 (91000057, 'Min Jun Kim', 26, 16),
 (91000058, 'Aino Lehtinen', 28, 17),
 (91000059, 'Jakub Kowalski', 30, 22),
-(91000060, 'Petra Novakova', 24, 23);
+(91000060, 'Petra Novakova', 24, 23),
+(91000061, 'Nicolas Herrera', 27, 12),
+(91000062, 'Camila Rojas', 25, 13),
+(91000063, 'Kenji Tanaka', 28, 15),
+(91000064, 'Yuna Sato', 23, 15),
+(91000065, 'Ji Park', 26, 16),
+(91000066, 'Mikko Virtanen', 29, 17),
+(91000067, 'Kasia Nowak', 24, 22),
+(91000068, 'Tomas Dvorak', 31, 23),
+(91000069, 'Luka Horvat', 27, 26),
+(91000070, 'Ana Popescu', 25, 27),
+(91000071, 'Emre Demir', 28, 30),
+(91000072, 'Lucas Silva', 26, 47),
+(91000073, 'Diego Salazar', 24, 14),
+(91000074, 'Sofia Blanco', 23, 20),
+(91000075, 'Ethan Miller', 29, 9),
+(91000076, 'Olivia Brown', 25, 9),
+(91000077, 'Noah Wilson', 30, 10),
+(91000078, 'Ava Thompson', 24, 10),
+(91000079, 'Chen Wei', 27, 33),
+(91000080, 'Li Na', 23, 33),
+(91000081, 'Harry Smith', 28, 34),
+(91000082, 'Grace Taylor', 26, 34),
+(91000083, 'Erik Jonsson', 29, 8),
+(91000084, 'Nora Hansen', 25, 7),
+(91000085, 'Mateusz Zielinski', 30, 22);
 
 UPDATE e
 SET e.Nombre = ex.Nombre,
@@ -169,7 +195,7 @@ WHERE e.Nombre LIKE 'Esquiador Complementario %';
 INSERT INTO Esquiadores (DNI, Nombre, Edad, ID_Federacion)
 SELECT DNI, Nombre, Edad, ID_Federacion
 FROM @EsquiadoresExtra ex
-WHERE (SELECT COUNT(*) FROM Esquiadores) < 60
+WHERE (SELECT COUNT(*) FROM Esquiadores) < 85
   AND NOT EXISTS (SELECT 1 FROM Esquiadores e WHERE e.DNI = ex.DNI);
 
 DECLARE @EquiposExtra TABLE (Nombre varchar(255), Orden int);
@@ -202,18 +228,28 @@ FROM Equipos e
 INNER JOIN actuales a ON a.Id_Equipo = e.Id_Equipo
 INNER JOIN nuevos n ON n.rn = a.rn;
 
+;WITH equipos_pendientes AS (
+    SELECT TOP (50 - (SELECT COUNT(*) FROM Equipos))
+        eq.Nombre,
+        eq.Orden,
+        ROW_NUMBER() OVER (ORDER BY eq.Orden) AS rn
+    FROM @EquiposExtra eq
+    WHERE NOT EXISTS (SELECT 1 FROM Equipos e WHERE e.Nombre = eq.Nombre)
+    ORDER BY eq.Orden
+),
+capitanes_libres AS (
+    SELECT
+        e.DNI,
+        ROW_NUMBER() OVER (ORDER BY e.DNI) AS rn
+    FROM Esquiadores e
+    WHERE NOT EXISTS (SELECT 1 FROM Pertenece_Equipos pe WHERE pe.DNI = e.DNI)
+      AND NOT EXISTS (SELECT 1 FROM [Participante indivi] pi WHERE pi.DNI = e.DNI)
+)
 INSERT INTO Equipos (Nombre, DniCapitan)
-SELECT TOP (50 - (SELECT COUNT(*) FROM Equipos))
-    eq.Nombre,
-    cap.DNI
-FROM @EquiposExtra eq
-CROSS APPLY (
-    SELECT TOP 1 DNI
-    FROM Esquiadores
-    ORDER BY ABS(CHECKSUM(DNI, eq.Orden))
-) cap
-WHERE NOT EXISTS (SELECT 1 FROM Equipos e WHERE e.Nombre = eq.Nombre)
-ORDER BY eq.Orden;
+SELECT ep.Nombre, cl.DNI
+FROM equipos_pendientes ep
+INNER JOIN capitanes_libres cl ON cl.rn = ep.rn
+ORDER BY ep.Orden;
 
 WHILE (SELECT COUNT(*) FROM Administran) < 50
 BEGIN
@@ -257,26 +293,26 @@ END;
 
 WHILE (SELECT COUNT(*) FROM Pista_Compuesta) < 50
 BEGIN
-    SELECT TOP 1 @estacion = p1.Codigo_Estacion, @pista = p1.[Num secuanecial], @pista2 = p2.[Num secuanecial]
-    FROM Pistas p1
-    INNER JOIN Pistas p2
-        ON p1.Codigo_Estacion = p2.Codigo_Estacion
-       AND p1.[Num secuanecial] < p2.[Num secuanecial]
+    SELECT TOP 1
+        @estacion = comp.Codigo_Estacion,
+        @pista = comp.[Num secuanecial],
+        @pista2 = base.[Num secuanecial]
+    FROM Pistas comp
+    INNER JOIN Pistas base
+        ON base.Codigo_Estacion = comp.Codigo_Estacion
+       AND base.[Num secuanecial] < 10
+       AND comp.[Num secuanecial] >= 10
+       AND comp.[Num secuanecial] <> base.[Num secuanecial]
     WHERE NOT EXISTS (
         SELECT 1 FROM Pista_Compuesta pc
-        WHERE pc.PistasCodigo_Estacion = p1.Codigo_Estacion
-          AND pc.Pista_1 = p1.[Num secuanecial]
-          AND pc.Pista_2 = p2.[Num secuanecial]
+        WHERE pc.Codigo_Estacion = comp.Codigo_Estacion
+          AND pc.Pista_Compuesta = comp.[Num secuanecial]
+          AND pc.Pista_Componente = base.[Num secuanecial]
     )
-    ORDER BY p1.Codigo_Estacion, p1.[Num secuanecial], p2.[Num secuanecial];
+    ORDER BY comp.Codigo_Estacion, comp.[Num secuanecial], base.[Num secuanecial];
 
-    INSERT INTO Pista_Compuesta (PistasCodigo_Estacion, Pista_1, Pista_2)
-    VALUES (@estacion, @pista, @pista2);
-END;
-
-WHILE (SELECT COUNT(*) FROM Participantes) < 50
-BEGIN
-    INSERT INTO Participantes (Tipo) VALUES ('INDIVIDUAL');
+    INSERT INTO Pista_Compuesta (Pista_Compuesta, Pista_Componente, Codigo_Estacion)
+    VALUES (@pista, @pista2, @estacion);
 END;
 
 DECLARE @PruebasExtra TABLE (Nombre varchar(255), Tipo varchar(255), Orden int);
@@ -344,18 +380,90 @@ CROSS APPLY (
     ORDER BY ABS(CHECKSUM(Codigo_Estacion, px.Orden))
 ) est
 CROSS APPLY (
-    SELECT TOP 1 Id_participantes
-    FROM Participantes
-    ORDER BY ABS(CHECKSUM(Id_participantes, px.Orden))
+    SELECT TOP 1 p.Id_participantes
+    FROM Participantes p
+    WHERE (
+            px.Nombre LIKE '%Equipos%'
+            AND p.Tipo = 'EQUIPO'
+            AND EXISTS (
+                SELECT 1
+                FROM ParticipanteEqupo pte
+                WHERE pte.Id_participantes = p.Id_participantes
+            )
+          )
+       OR (
+            px.Nombre NOT LIKE '%Equipos%'
+            AND p.Tipo = 'INDIVIDUAL'
+            AND EXISTS (
+                SELECT 1
+                FROM [Participante indivi] pi
+                WHERE pi.Id_participantes = p.Id_participantes
+            )
+          )
+    ORDER BY ABS(CHECKSUM(p.Id_participantes, px.Orden))
 ) par
 WHERE NOT EXISTS (SELECT 1 FROM Pruebas p WHERE p.Nombre = px.Nombre)
 ORDER BY px.Orden;
+
+INSERT INTO Pruebas_Pistas (ID_Prueba, [Num secuanecial], Codigo_Estacion)
+SELECT pr.IdTPrueba, pi.[Num secuanecial], pr.Codigo_Estacion
+FROM Pruebas pr
+CROSS APPLY (
+    SELECT TOP 1 [Num secuanecial]
+    FROM Pistas pi
+    WHERE pi.Codigo_Estacion = pr.Codigo_Estacion
+      AND pi.[Num secuanecial] < 10
+    ORDER BY pi.[Num secuanecial]
+) pi
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM Pruebas_Pistas pp
+    WHERE pp.ID_Prueba = pr.IdTPrueba
+);
+
+INSERT INTO Participacion (Id_participante, IdPrueba, Numero_Secuencial, Posicion)
+SELECT pr.ID_Ganador, pr.IdTPrueba, 1, 1
+FROM Pruebas pr
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM Participacion pa
+    WHERE pa.IdPrueba = pr.IdTPrueba
+);
+
+INSERT INTO Jornadas (Id_participante, IdPrueba, fecha, TiempoParcial)
+SELECT pr.ID_Ganador, pr.IdTPrueba, pr.Fecha_inicio_Prevista, pr.Tiempo_Ganador
+FROM Pruebas pr
+INNER JOIN [Participante indivi] pi
+    ON pi.Id_participantes = pr.ID_Ganador
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM Jornadas j
+    WHERE j.IdPrueba = pr.IdTPrueba
+);
+
+INSERT INTO interviene (DNI, IdTPrueba, Id_participantes, fecha, TiempoEmpleado, Posicion)
+SELECT miembro.DNI, pr.IdTPrueba, pr.ID_Ganador, pr.Fecha_inicio_Prevista, pr.Tiempo_Ganador, 1
+FROM Pruebas pr
+INNER JOIN ParticipanteEqupo pte
+    ON pte.Id_participantes = pr.ID_Ganador
+CROSS APPLY (
+    SELECT TOP 1 pe.DNI
+    FROM Pertenece_Equipos pe
+    WHERE pe.ID_Equipo = pte.Id_Equipo
+    ORDER BY pe.DNI
+) miembro
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM interviene iv
+    WHERE iv.IdTPrueba = pr.IdTPrueba
+);
 
 WHILE (SELECT COUNT(*) FROM Pertenece_Equipos) < 50
 BEGIN
     SELECT TOP 1 @dni = e.DNI
     FROM Esquiadores e
     WHERE NOT EXISTS (SELECT 1 FROM Pertenece_Equipos pe WHERE pe.DNI = e.DNI)
+      AND NOT EXISTS (SELECT 1 FROM [Participante indivi] pi WHERE pi.DNI = e.DNI)
     ORDER BY e.DNI;
 
     SELECT TOP 1 @equipo = Id_Equipo
@@ -390,6 +498,11 @@ BEGIN
 
     SELECT TOP 1 @dni = DNI
     FROM Esquiadores
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM Pertenece_Equipos pe
+        WHERE pe.DNI = Esquiadores.DNI
+    )
     ORDER BY ABS(CHECKSUM(DNI, @participante));
 
     INSERT INTO [Participante indivi] (Id_participantes, DNI)
@@ -421,8 +534,12 @@ BEGIN
     )
     ORDER BY p.Id_participantes, pr.IdTPrueba;
 
-    INSERT INTO Participacion (Id_participante, IdPrueba, Posicion)
-    VALUES (@participante, @prueba, ((@participante + @prueba) % 20) + 1);
+    SELECT @numero = ISNULL(MAX(Numero_Secuencial), 0) + 1
+    FROM Participacion
+    WHERE IdPrueba = @prueba;
+
+    INSERT INTO Participacion (Id_participante, IdPrueba, Numero_Secuencial, Posicion)
+    VALUES (@participante, @prueba, @numero, ((@participante + @prueba) % 20) + 1);
 END;
 
 WHILE (SELECT COUNT(*) FROM Jornadas) < 50
@@ -432,6 +549,8 @@ BEGIN
 
     SELECT TOP 1 @participante = pa.Id_participante, @prueba = pa.IdPrueba
     FROM Participacion pa
+    INNER JOIN [Participante indivi] pi
+        ON pi.Id_participantes = pa.Id_participante
     WHERE NOT EXISTS (
         SELECT 1 FROM Jornadas j
         WHERE j.Id_participante = pa.Id_participante
@@ -451,7 +570,8 @@ BEGIN
     SELECT TOP 1 @dni = pe.DNI, @participante = pte.Id_participantes, @prueba = pr.IdTPrueba
     FROM Pertenece_Equipos pe
     INNER JOIN ParticipanteEqupo pte ON pte.Id_Equipo = pe.ID_Equipo
-    CROSS JOIN Pruebas pr
+    INNER JOIN Participacion pa ON pa.Id_participante = pte.Id_participantes
+    INNER JOIN Pruebas pr ON pr.IdTPrueba = pa.IdPrueba
     WHERE NOT EXISTS (
         SELECT 1 FROM interviene iv
         WHERE iv.DNI = pe.DNI
@@ -462,6 +582,37 @@ BEGIN
 
     INSERT INTO interviene (DNI, IdTPrueba, Id_participantes, fecha, TiempoEmpleado, Posicion)
     VALUES (@dni, @prueba, @participante, DATEADD(DAY, @i, '2026-04-15'), 9000 + (@i * 180), ((@i - 1) % 20) + 1);
+END;
+GO
+
+UPDATE pr
+SET ID_Ganador = ganador.Id_participante
+FROM Pruebas pr
+CROSS APPLY (
+    SELECT TOP 1 pa.Id_participante
+    FROM Participacion pa
+    WHERE pa.IdPrueba = pr.IdTPrueba
+    ORDER BY pa.Posicion, pa.Numero_Secuencial
+) ganador
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM Participacion pa
+    WHERE pa.IdPrueba = pr.IdTPrueba
+      AND pa.Id_participante = pr.ID_Ganador
+);
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.foreign_keys
+    WHERE name = 'FK_Pruebas_Ganador_Participacion'
+      AND parent_object_id = OBJECT_ID('Pruebas')
+)
+BEGIN
+    ALTER TABLE Pruebas WITH CHECK
+    ADD CONSTRAINT FK_Pruebas_Ganador_Participacion
+    FOREIGN KEY (ID_Ganador, IdTPrueba)
+    REFERENCES Participacion (Id_participante, IdPrueba);
 END;
 GO
 
